@@ -161,14 +161,14 @@ class Agent(BaseModel):
       max_q_t_plus_1 = np.max(q_t_plus_1, axis=1)
       target_q_t = (1. - terminal) * self.discount * max_q_t_plus_1 + reward
 
-    _, q_t, loss, summary_str = self.sess.run([self.optim, self.q, self.loss, self.q_summary], {
+    _, q_t, loss = self.sess.run([self.optim, self.q, self.loss], {
       self.target_q_t: target_q_t,
       self.action: action,
       self.s_t: s_t,
       self.learning_rate_step: self.step,
     })
 
-    self.writer.add_summary(summary_str, self.step)
+   
     self.total_loss += loss
     self.total_q += q_t.mean()
     self.update_count += 1
@@ -224,9 +224,6 @@ class Agent(BaseModel):
 
       q_summary = []
       avg_q = tf.reduce_mean(self.q, 0)
-      for idx in xrange(self.env.action_size):
-        q_summary.append(tf.summary.histogram('q/%s' % idx, avg_q[idx]))
-      self.q_summary = tf.summary.merge(q_summary, 'q_summary')
 
     # target network
     with tf.variable_scope('target'):
@@ -304,24 +301,6 @@ class Agent(BaseModel):
       self.optim = tf.train.RMSPropOptimizer(
           self.learning_rate_op, momentum=0.95, epsilon=0.01).minimize(self.loss)
 
-    with tf.variable_scope('summary'):
-      scalar_summary_tags = ['average.reward', 'average.loss', 'average.q', \
-          'episode.max reward', 'episode.min reward', 'episode.avg reward', 'episode.num of game', 'training.learning_rate']
-
-      self.summary_placeholders = {}
-      self.summary_ops = {}
-
-      for tag in scalar_summary_tags:
-        self.summary_placeholders[tag] = tf.placeholder('float32', None, name=tag.replace(' ', '_'))
-        self.summary_ops[tag]  = tf.summary.scalar("%s-%s/%s" % (self.env_name, self.env_type, tag), self.summary_placeholders[tag])
-
-      histogram_summary_tags = ['episode.rewards', 'episode.actions']
-
-      for tag in histogram_summary_tags:
-        self.summary_placeholders[tag] = tf.placeholder('float32', None, name=tag.replace(' ', '_'))
-        self.summary_ops[tag]  = tf.summary.histogram(tag, self.summary_placeholders[tag])
-
-      self.writer = tf.summary.FileWriter('./logs/%s' % self.model_dir, self.sess.graph)
 
     tf.initialize_all_variables().run()
 
