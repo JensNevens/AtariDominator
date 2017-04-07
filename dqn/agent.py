@@ -301,6 +301,24 @@ class Agent(BaseModel):
       self.optim = tf.train.RMSPropOptimizer(
           self.learning_rate_op, momentum=0.95, epsilon=0.01).minimize(self.loss)
 
+    with tf.variable_scope('summary'):
+      scalar_summary_tags = ['average.reward', 'average.loss', 'average.q', \
+          'episode.max reward', 'episode.min reward', 'episode.avg reward', 'episode.num of game', 'training.learning_rate']
+
+      self.summary_placeholders = {}
+      self.summary_ops = {}
+
+      for tag in scalar_summary_tags:
+        self.summary_placeholders[tag] = tf.placeholder('float32', None, name=tag.replace(' ', '_'))
+        self.summary_ops[tag]  = tf.scalar_summary("%s-%s/%s" % (self.env_name, self.env_type, tag), self.summary_placeholders[tag])
+
+      histogram_summary_tags = ['episode.rewards', 'episode.actions']
+
+      for tag in histogram_summary_tags:
+        self.summary_placeholders[tag] = tf.placeholder('float32', None, name=tag.replace(' ', '_'))
+        self.summary_ops[tag]  = tf.histogram_summary(tag, self.summary_placeholders[tag])
+
+        self.writer = tf.train.SummaryWriter('./logs/%s' % self.model_dir, self.sess.graph)
 
     tf.initialize_all_variables().run()
 
