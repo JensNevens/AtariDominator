@@ -36,6 +36,7 @@ class ReplayMemory:
     self.terminals[self.current] = terminal
     self.count = max(self.count, self.current + 1)
     self.current = (self.current + 1) % self.memory_size
+    # TODO: When adding a sample, also create a mask and add this to the sample
 
   def getState(self, index):
     assert self.count > 0, "replay memory is empy, use at least --random_steps 1"
@@ -56,9 +57,9 @@ class ReplayMemory:
     # sample random indexes
     indexes = []
     while len(indexes) < self.batch_size:
-      # find random index 
+      # find random index
       while True:
-        # sample one index (ignore states wraping over 
+        # sample one index (ignore states wraping over
         index = random.randint(self.history_length, self.count - 1)
         # if wraps over current pointer, then get new one
         if index >= self.current and index - self.history_length < self.current:
@@ -69,7 +70,7 @@ class ReplayMemory:
           continue
         # otherwise use this index
         break
-      
+
       # NB! having index first is fastest in C-order matrices
       self.prestates[len(indexes), ...] = self.getState(index - 1)
       self.poststates[len(indexes), ...] = self.getState(index)
@@ -78,6 +79,7 @@ class ReplayMemory:
     actions = self.actions[indexes]
     rewards = self.rewards[indexes]
     terminals = self.terminals[indexes]
+    # TODO: Also return the mask in the sample
 
     if self.cnn_format == 'NHWC':
       return np.transpose(self.prestates, (0, 2, 3, 1)), actions, \
