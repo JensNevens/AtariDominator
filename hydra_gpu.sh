@@ -17,6 +17,7 @@ module add cuDNN/6.0-CUDA-8.0.61
 cd $HOME
 source .bashrc
 source activate dqn
+<<<<<<< HEAD
 cd dev/AtariDominator
 python main.py --use_gpu 1
 

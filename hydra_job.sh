@@ -15,6 +15,6 @@ module add cuDNN/4.0
 cd $HOME
 source .bashrc
 source activate dqn
-cd DQN-agent
+cd AtariDominator
 python main.py --use_gpu 0
 
