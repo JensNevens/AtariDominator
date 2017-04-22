@@ -1,11 +1,12 @@
 #!/bin/bash -l
 
 #PBS -l nodes=1:ppn=4
+#PBS -l feature=gpgpu
 #PBS -l mem=16gb
 #PBS -l walltime=72:00:00
-#PBS -o dqn.out
-#PBS -e dqn.err
-#PBS -N dqn
+#PBS -o dqn-gpu.out
+#PBS -e dqn-gpu.err
+#PBS -N dqn-gpu
 #PBS -V
 
 module add openblas
@@ -16,4 +17,4 @@ cd $HOME
 source .bashrc
 source activate dqn
 cd DQN-agent
-python main.py --use_gpu 0
+python main.py --use_gpu 1
