@@ -1,6 +1,8 @@
 # misc
 logs
 .DS_Store
+*.err
+*.out
 
 # data
 samples
