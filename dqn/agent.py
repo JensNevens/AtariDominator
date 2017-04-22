@@ -43,14 +43,12 @@ class Agent(BaseModel):
     for _ in range(self.history_length):
       self.history.add(screen)
 
-    # TODO: Choose a head for this episode
     for self.step in tqdm(range(start_step, self.max_step), ncols=70, initial=start_step):
       if self.step == self.learn_start:
         num_game, self.update_count, ep_reward = 0, 0, 0.
         total_reward, self.total_loss, self.total_q = 0., 0., 0.
         ep_rewards, actions = [], []
 
-      # TODO: Act according to 1 of the K heads
       # 1. predict
       action = self.predict(self.history.get())
       # 2. act
@@ -163,14 +161,14 @@ class Agent(BaseModel):
       max_q_t_plus_1 = np.max(q_t_plus_1, axis=1)
       target_q_t = (1. - terminal) * self.discount * max_q_t_plus_1 + reward
 
-    _, q_t, loss = self.sess.run([self.optim, self.q, self.loss], {
+    _, q_t, loss, summary_str = self.sess.run([self.optim, self.q, self.loss, self.q_summary], {
       self.target_q_t: target_q_t,
       self.action: action,
       self.s_t: s_t,
       self.learning_rate_step: self.step,
     })
 
-
+    self.writer.add_summary(summary_str, self.step)
     self.total_loss += loss
     self.total_q += q_t.mean()
     self.update_count += 1
@@ -216,7 +214,7 @@ class Agent(BaseModel):
           linear(self.adv_hid, self.env.action_size, name='adv_out')
 
         # Average Dueling
-        self.q = self.value + (self.advantage -
+        self.q = self.value + (self.advantage - 
           tf.reduce_mean(self.advantage, reduction_indices=1, keep_dims=True))
       else:
         self.l4, self.w['l4_w'], self.w['l4_b'] = linear(self.l3_flat, 512, activation_fn=activation_fn, name='l4')
@@ -226,17 +224,20 @@ class Agent(BaseModel):
 
       q_summary = []
       avg_q = tf.reduce_mean(self.q, 0)
+      for idx in xrange(self.env.action_size):
+        q_summary.append(tf.summary.histogram('q/%s' % idx, avg_q[idx]))
+      self.q_summary = tf.summary.merge(q_summary, 'q_summary')
 
     # target network
     with tf.variable_scope('target'):
       if self.cnn_format == 'NHWC':
-        self.target_s_t = tf.placeholder('float32',
+        self.target_s_t = tf.placeholder('float32', 
             [None, self.screen_height, self.screen_width, self.history_length], name='target_s_t')
       else:
-        self.target_s_t = tf.placeholder('float32',
+        self.target_s_t = tf.placeholder('float32', 
             [None, self.history_length, self.screen_height, self.screen_width], name='target_s_t')
 
-      self.target_l1, self.t_w['l1_w'], self.t_w['l1_b'] = conv2d(self.target_s_t,
+      self.target_l1, self.t_w['l1_w'], self.t_w['l1_b'] = conv2d(self.target_s_t, 
           32, [8, 8], [4, 4], initializer, activation_fn, self.cnn_format, name='target_l1')
       self.target_l2, self.t_w['l2_w'], self.t_w['l2_b'] = conv2d(self.target_l1,
           64, [4, 4], [2, 2], initializer, activation_fn, self.cnn_format, name='target_l2')
@@ -260,7 +261,7 @@ class Agent(BaseModel):
           linear(self.t_adv_hid, self.env.action_size, name='target_adv_out')
 
         # Average Dueling
-        self.target_q = self.t_value + (self.t_advantage -
+        self.target_q = self.t_value + (self.t_advantage - 
           tf.reduce_mean(self.t_advantage, reduction_indices=1, keep_dims=True))
       else:
         self.target_l4, self.t_w['l4_w'], self.t_w['l4_b'] = \
@@ -281,8 +282,6 @@ class Agent(BaseModel):
 
     # optimizer
     with tf.variable_scope('optimizer'):
-      # TODO: Split target Q output over K heads
-      # Apply mask to distribute data across heads
       self.target_q_t = tf.placeholder('float32', [None], name='target_q_t')
       self.action = tf.placeholder('int64', [None], name='action')
 
@@ -304,7 +303,6 @@ class Agent(BaseModel):
               staircase=True))
       self.optim = tf.train.RMSPropOptimizer(
           self.learning_rate_op, momentum=0.95, epsilon=0.01).minimize(self.loss)
-      # TODO: Split in compute_Gradients and apply_gradients to incorporate gradient normalization
 
     with tf.variable_scope('summary'):
       scalar_summary_tags = ['average.reward', 'average.loss', 'average.q', \
@@ -315,15 +313,15 @@ class Agent(BaseModel):
 
       for tag in scalar_summary_tags:
         self.summary_placeholders[tag] = tf.placeholder('float32', None, name=tag.replace(' ', '_'))
-        self.summary_ops[tag]  = tf.scalar_summary("%s-%s/%s" % (self.env_name, self.env_type, tag), self.summary_placeholders[tag])
+        self.summary_ops[tag]  = tf.summary.scalar("%s-%s/%s" % (self.env_name, self.env_type, tag), self.summary_placeholders[tag])
 
       histogram_summary_tags = ['episode.rewards', 'episode.actions']
 
       for tag in histogram_summary_tags:
         self.summary_placeholders[tag] = tf.placeholder('float32', None, name=tag.replace(' ', '_'))
-        self.summary_ops[tag]  = tf.histogram_summary(tag, self.summary_placeholders[tag])
+        self.summary_ops[tag]  = tf.summary.histogram(tag, self.summary_placeholders[tag])
 
-        self.writer = tf.train.SummaryWriter('./logs/%s' % self.model_dir, self.sess.graph)
+      self.writer = tf.summary.FileWriter('./logs/%s' % self.model_dir, self.sess.graph)
 
     tf.initialize_all_variables().run()
 
@@ -375,7 +373,6 @@ class Agent(BaseModel):
       self.env.env.monitor.start(gym_dir)
 
     best_reward, best_idx = 0, 0
-    # TODO: For evaluation, using an ensemble voting policy using all heads
     for idx in xrange(n_episode):
       screen, reward, action, terminal = self.env.new_random_game()
       current_reward = 0
