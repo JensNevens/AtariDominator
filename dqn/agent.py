@@ -323,7 +323,7 @@ class Agent(BaseModel):
 
       self.writer = tf.summary.FileWriter('./logs/%s' % self.model_dir, self.sess.graph)
 
-    tf.initialize_all_variables().run()
+    self.sess.run(tf.global_variables_initializer())
 
     self._saver = tf.train.Saver(self.w.values() + [self.step_op], max_to_keep=30)
 
