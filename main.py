@@ -43,7 +43,8 @@ def calc_gpu_fraction(fraction_string):
 
 def main(_):
   gpu_options = tf.GPUOptions(
-      per_process_gpu_memory_fraction=calc_gpu_fraction(FLAGS.gpu_fraction))
+      # per_process_gpu_memory_fraction=calc_gpu_fraction(FLAGS.gpu_fraction))
+      allow_growth=True)
 
   with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     config = get_config(FLAGS) or FLAGS
