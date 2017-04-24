@@ -15,7 +15,7 @@ class AgentConfig(object):
   learning_rate_decay = 0.96
   learning_rate_decay_step = 5 * scale
 
-  ep_end = 0.1
+  ep_end = 0.01
   ep_start = 1.
   ep_end_t = memory_size
 
@@ -27,7 +27,7 @@ class AgentConfig(object):
   max_delta = 1
 
   double_q = False
-  dueling = False
+  dueling =  False
 
   _test_step = 5 * scale
   _save_step = _test_step * 10
@@ -35,8 +35,10 @@ class AgentConfig(object):
 class EnvironmentConfig(object):
   env_name = 'Breakout-v0'
 
-  screen_width  = 84
-  screen_height = 84
+  # screen_width  = 84
+  # screen_height = 84
+  screen_width =  48
+  screen_height = 48
   max_reward = 1.
   min_reward = -1.
 
