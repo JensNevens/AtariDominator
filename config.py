@@ -17,7 +17,7 @@ class AgentConfig(object):
 
     ep_end = 0.01
     ep_start = 1.
-    ep_end_t = 100 * 10000
+    ep_end_t = 100 * scale
 
     history_length = 4
     train_frequency = 4
@@ -53,6 +53,7 @@ class M1(DQNConfig):
     backend = 'tf'
     env_type = 'detail'
     action_repeat = 1
+    # This sucks
     learning_rate = 0.0025
     learning_rate_minimum = 0.0025
 
@@ -60,7 +61,18 @@ class M2(DQNConfig):
     backend = 'tf'
     env_type = 'detail'
     action_repeat = 1
+    # This is doing good
     history_length = 8
+
+class M3(DQNConfig):
+    backend = 'tf'
+    env_type = 'detail'
+    action_repeat = 1
+    scale = 10000
+    learning_rate = 0.0025
+    learning_rate_minimum = 0.00025
+    learning_rate_decay = 0.96
+    learning_rate_decay_step = 5 * scale
 
 def get_config(FLAGS):
     if FLAGS.model == 'base':
@@ -69,6 +81,8 @@ def get_config(FLAGS):
         config = M1
     elif FLAGS.model == 'm2':
         config = M2
+    elif FLAGS.model == 'm3':
+        config = M3
 
     for k, v in FLAGS.__dict__['__flags'].items():
         if k == 'gpu':
