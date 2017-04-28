@@ -1,12 +1,11 @@
 #!/bin/bash -l
 
-#PBS -l nodes=1:ppn=4
-#PBS -l feature=gpgpu
+#PBS -l nodes=1:ppn=4:gpus=1:gpgpu
 #PBS -l mem=16gb
-#PBS -l walltime=72:00:00
-#PBS -o dqn-gpu.out
-#PBS -e dqn-gpu.err
-#PBS -N dqn-gpu
+#PBS -l walltime=120:00:00
+#PBS -o Pong.out
+#PBS -e Pong.err
+#PBS -N Pong
 #PBS -V
 
 module add imkl
@@ -17,4 +16,4 @@ cd $HOME
 source .bashrc
 source activate dqn
 cd dev/AtariDominator
-python main.py --use_gpu 1
+python main.py --use_gpu 1 --is_train True --env_name Pong-v0 --model base

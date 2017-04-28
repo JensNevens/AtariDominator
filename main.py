@@ -9,7 +9,7 @@ from config import get_config
 flags = tf.app.flags
 
 # Model
-flags.DEFINE_string('model', 'm1', 'Type of model')
+flags.DEFINE_string('model', 'base', 'Type of model')
 flags.DEFINE_boolean('dueling', False, 'Whether to use dueling deep q-network')
 flags.DEFINE_boolean('double_q', False, 'Whether to use double q-learning')
 
