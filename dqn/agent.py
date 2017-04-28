@@ -101,8 +101,8 @@ class Agent(BaseModel):
                 'episode.min reward': min_ep_reward,
                 'episode.avg reward': avg_ep_reward,
                 'episode.num of game': num_game,
-                'episode.rewards': ep_rewards,
-                'episode.actions': actions,
+                # 'episode.rewards': ep_rewards,
+                # 'episode.actions': actions,
                 'training.learning_rate': self.learning_rate_op.eval({self.learning_rate_step: self.step}),
               }, self.step)
 
