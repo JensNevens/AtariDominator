@@ -1,0 +1,18 @@
+#!/bin/bash -l
+
+#PBS -t 1-10
+
+#PBS -l nodes=1:ppn=4:gpus=1:gpgpu
+#PBS -l mem=16gb
+#PBS -l walltime=120:00:00
+#PBS -o Pong-array-${PBS_ARRAYID}.out
+#PBS -e Pong-array-${PBS_ARRAYID}.err
+#PBS -N Pong-${PBS_ARRAYID}
+#PBS -V
+
+module add imkl
+module add CUDA/8.0.61
+module add cuDNN/6.0-CUDA-8.0.61
+
+# Launch the matching script file
+bash ./jobs/Pong-run-${PBS_ARRAYID}.cmds
