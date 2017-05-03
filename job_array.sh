@@ -15,4 +15,4 @@ module add CUDA/8.0.61
 module add cuDNN/6.0-CUDA-8.0.61
 
 # Launch the matching script file
-bash ./jobs/Pong-run-${PBS_ARRAYID}.cmds
+bash $HOME/dev/AtariDominator/jobs/Pong-run-${PBS_ARRAYID}.cmds
