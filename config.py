@@ -32,6 +32,8 @@ class AgentConfig(object):
     _test_step = 5 * scale
     _save_step = _test_step * 10
 
+    random_seed = 123
+
 class EnvironmentConfig(object):
     env_name = 'Breakout-v0'
 
@@ -50,24 +52,12 @@ class Baseline(DQNConfig):
     action_repeat = 1
 
 class M1(DQNConfig):
-    backend = 'tf'
-    env_type = 'detail'
-    action_repeat = 1
-    # This sucks
-    learning_rate = 0.0025
-    learning_rate_minimum = 0.0025
+    ep_end = 0.1
 
 class M2(DQNConfig):
-    backend = 'tf'
-    env_type = 'detail'
-    action_repeat = 1
-    # This is doing good
     history_length = 8
 
 class M3(DQNConfig):
-    backend = 'tf'
-    env_type = 'detail'
-    action_repeat = 1
     scale = 10000
     learning_rate = 0.0025
     learning_rate_minimum = 0.00025
