@@ -5,9 +5,9 @@
 #PBS -l nodes=1:ppn=4:gpus=1:gpgpu
 #PBS -l mem=16gb
 #PBS -l walltime=120:00:00
-#PBS -o Pong-array-${PBS_ARRAYID}.out
-#PBS -e Pong-array-${PBS_ARRAYID}.err
-#PBS -N Pong-${PBS_ARRAYID}
+#PBS -o Pong-base.out
+#PBS -e Pong-base.err
+#PBS -N Pong
 #PBS -V
 
 module add imkl
