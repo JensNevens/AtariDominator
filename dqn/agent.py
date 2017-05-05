@@ -115,7 +115,7 @@ class Agent(BaseModel):
           ep_rewards = []
           actions = []
 
-  def predict(self, s_t, test_ep=None):
+  def predict(self, s_t, test_ep=None, head=0):
     ep = test_ep or (self.ep_end +
         max(0., (self.ep_start - self.ep_end)
           * (self.ep_end_t - max(0., self.step - self.learn_start)) / self.ep_end_t))
@@ -123,7 +123,7 @@ class Agent(BaseModel):
     if random.random() < ep:
       action = random.randrange(self.env.action_size)
     else:
-      action = self.q_action.eval({self.s_t: [s_t]})[0]
+      action = self.qs_action[head].eval({self.s_t: [s_t]})[0]
 
     return action
 
@@ -175,6 +175,14 @@ class Agent(BaseModel):
     self.total_q += q_t.mean()
     self.update_count += 1
 
+
+  def select_head(self, head):
+    self.q = self.qs[head]
+    self.q_action = self.qs_action[head]
+    self.target_q = self.target_qs[head]
+    self.target_q_idx = self.target_qs_idx[head]
+    self.target_q_with_idx = self.target_qs_with_idx[head]
+
   def build_dqn(self):
     self.w = {}
     self.t_w = {}
@@ -220,17 +228,22 @@ class Agent(BaseModel):
           tf.reduce_mean(self.advantage, reduction_indices=1, keep_dims=True))
       else:
         self.l4, self.w['l4_w'], self.w['l4_b'] = linear(self.l3_flat, 512, activation_fn=activation_fn, name='l4')
+        # make a q for each head
+        self.qs = []
+        self.qs_action = []
+        q_summary = []
         for head in range(self.nb_heads):
-            q = 'q{}'.format(head)
-            self.q, self.w[q+'_w'], self.w[q+'_b'] = linear(self.l4, self.env.action_size, name=q)
+          q_name = 'q{}'.format(head)
+          q, self.w[q_name+'_w'], self.w[q_name+'_b'] = linear(self.l4, self.env.action_size, name=q_name)
+          self.qs.append(q)
+          # action for each head is its highest q-value
+          self.qs_action.append(tf.argmax(q, dimension=1))
+          # make summaries of Qs
+          avg_q = tf.reduce_mean(q, 0)
+          for idx in xrange(self.env.action_size):
+            q_summary.append(tf.summary.histogram('q/{}/{}'.format(head, idx), avg_q[idx]))
 
-      self.q_action = tf.argmax(self.q, dimension=1)
-
-      q_summary = []
-      avg_q = tf.reduce_mean(self.q, 0)
-      for idx in xrange(self.env.action_size):
-        q_summary.append(tf.summary.histogram('q/%s' % idx, avg_q[idx]))
-      self.q_summary = tf.summary.merge(q_summary, 'q_summary')
+        self.q_summary = tf.summary.merge(q_summary, 'q_summary')
 
     # target network
     with tf.variable_scope('target'):
@@ -270,13 +283,20 @@ class Agent(BaseModel):
       else:
         self.target_l4, self.t_w['l4_w'], self.t_w['l4_b'] = \
             linear(self.target_l3_flat, 512, activation_fn=activation_fn, name='target_l4')
+        # make target Q for each head
+        self.target_qs = []
+        self.target_qs_idx = []
+        self.target_qs_with_idx = []
         for head in range(self.nb_heads):
-            q = 'q{}'.format(head)
-            self.target_q, self.t_w[q+'_w'], self.t_w[q+'_b'] = \
-                linear(self.target_l4, self.env.action_size, name='target_'+q)
+          q = 'q{}'.format(head)
+          target_q, self.t_w[q+'_w'], self.t_w[q+'_b'] = \
+            linear(self.target_l4, self.env.action_size, name='target_'+q)
 
-      self.target_q_idx = tf.placeholder('int32', [None, None], 'outputs_idx')
-      self.target_q_with_idx = tf.gather_nd(self.target_q, self.target_q_idx)
+          target_q_idx = tf.placeholder('int32', [None, None], 'outputs_idx')
+          target_q_with_idx = tf.gather_nd(target_q, target_q_idx)
+          self.target_qs.append(target_q)
+          self.target_qs_idx.append(target_q_idx)
+          self.target_qs_with_idx.append(target_q_with_idx)
 
     with tf.variable_scope('pred_to_target'):
       self.t_w_input = {}
@@ -285,7 +305,8 @@ class Agent(BaseModel):
       for name in self.w.keys():
         self.t_w_input[name] = tf.placeholder('float32', self.t_w[name].get_shape().as_list(), name=name)
         self.t_w_assign_op[name] = self.t_w[name].assign(self.t_w_input[name])
-
+    #TODO temp
+    self.select_head(0)
     # optimizer
     with tf.variable_scope('optimizer'):
       # TODO: Split target Q output over K heads
