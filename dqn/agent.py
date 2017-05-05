@@ -220,7 +220,9 @@ class Agent(BaseModel):
           tf.reduce_mean(self.advantage, reduction_indices=1, keep_dims=True))
       else:
         self.l4, self.w['l4_w'], self.w['l4_b'] = linear(self.l3_flat, 512, activation_fn=activation_fn, name='l4')
-        self.q, self.w['q_w'], self.w['q_b'] = linear(self.l4, self.env.action_size, name='q')
+        for head in range(self.nb_heads):
+            q = 'q{}'.format(head)
+            self.q, self.w[q+'_w'], self.w[q+'_b'] = linear(self.l4, self.env.action_size, name=q)
 
       self.q_action = tf.argmax(self.q, dimension=1)
 
@@ -268,8 +270,10 @@ class Agent(BaseModel):
       else:
         self.target_l4, self.t_w['l4_w'], self.t_w['l4_b'] = \
             linear(self.target_l3_flat, 512, activation_fn=activation_fn, name='target_l4')
-        self.target_q, self.t_w['q_w'], self.t_w['q_b'] = \
-            linear(self.target_l4, self.env.action_size, name='target_q')
+        for head in range(self.nb_heads):
+            q = 'q{}'.format(head)
+            self.target_q, self.t_w[q+'_w'], self.t_w[q+'_b'] = \
+                linear(self.target_l4, self.env.action_size, name='target_'+q)
 
       self.target_q_idx = tf.placeholder('int32', [None, None], 'outputs_idx')
       self.target_q_with_idx = tf.gather_nd(self.target_q, self.target_q_idx)
