@@ -44,13 +44,13 @@ class Agent(BaseModel):
       self.history.add(screen)
 
      # TODO: Choose a head for this episode
+    self.select_head(0)
     for self.step in tqdm(range(start_step, self.max_step), ncols=70, initial=start_step):
       if self.step == self.learn_start:
         num_game, self.update_count, ep_reward = 0, 0, 0.
         total_reward, self.total_loss, self.total_q = 0., 0., 0.
         ep_rewards, actions = [], []
 
-      # TODO: Act according to 1 of the K heads
       # 1. predict
       action = self.predict(self.history.get())
       # 2. act
@@ -115,7 +115,7 @@ class Agent(BaseModel):
           ep_rewards = []
           actions = []
 
-  def predict(self, s_t, test_ep=None, head=0):
+  def predict(self, s_t, test_ep=None):
     ep = test_ep or (self.ep_end +
         max(0., (self.ep_start - self.ep_end)
           * (self.ep_end_t - max(0., self.step - self.learn_start)) / self.ep_end_t))
@@ -123,7 +123,7 @@ class Agent(BaseModel):
     if random.random() < ep:
       action = random.randrange(self.env.action_size)
     else:
-      action = self.qs_action[head].eval({self.s_t: [s_t]})[0]
+      action = self.q_action.eval({self.s_t: [s_t]})[0]
 
     return action
 
@@ -166,7 +166,7 @@ class Agent(BaseModel):
     _, q_t, loss, summary_str = self.sess.run([self.optim, self.q, self.loss, self.q_summary], {
       self.target_q_t: target_q_t,
       self.action: action,
-      self.head: 0,
+      self.head: self.current_head,
       self.s_t: s_t,
       self.learning_rate_step: self.step,
     })
@@ -178,11 +178,13 @@ class Agent(BaseModel):
 
 
   def select_head(self, head):
+    self.current_head = head
     self.q = self.qs[head]
     self.q_action = self.qs_action[head]
     self.target_q = self.target_qs[head]
     self.target_q_idx = self.target_qs_idx[head]
     self.target_q_with_idx = self.target_qs_with_idx[head]
+    self.optim = self.optims[head]
 
   def build_dqn(self):
     self.w = {}
@@ -308,7 +310,6 @@ class Agent(BaseModel):
         self.t_w_assign_op[name] = self.t_w[name].assign(self.t_w_input[name])
     # optimizer
     with tf.variable_scope('optimizer'):
-      # TODO: Split target Q output over K heads
       # Apply mask to distribute data across heads
       self.target_q_t = tf.placeholder('float32', [None], name='target_q_t')
       self.action = tf.placeholder('int64', [None], name='action')
@@ -346,8 +347,6 @@ class Agent(BaseModel):
         self.optims.append(optim.minimize(self.loss, var_list=trainable_vars))
         # print([v.name for v in trainable_vars])
         # TODO: Split in compute_Gradients and apply_gradients to incorporate gradient normalization
-    #TODO temp
-    self.select_head(0)
 
     with tf.variable_scope('summary'):
       scalar_summary_tags = ['average.reward', 'average.loss', 'average.q', \
@@ -419,6 +418,7 @@ class Agent(BaseModel):
 
     best_reward, best_idx = 0, 0
     # TODO: For evaluation, using an ensemble voting policy using all heads
+    self.select_head(0)
     for idx in xrange(n_episode):
       screen, reward, action, terminal = self.env.new_random_game()
       current_reward = 0
