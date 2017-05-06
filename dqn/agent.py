@@ -320,7 +320,7 @@ class Agent(BaseModel):
       # one-hot head tensor
       head_q = tf.reduce_sum(head_one_hot * tf.stack(self.qs, axis=2), 2)
       q_acted = tf.reduce_sum(head_q * action_one_hot, reduction_indices=1, name='q_acted')
-      
+
       self.delta = self.target_q_t - q_acted
 
       self.global_step = tf.Variable(0, trainable=False)
@@ -334,9 +334,18 @@ class Agent(BaseModel):
               self.learning_rate_decay_step,
               self.learning_rate_decay,
               staircase=True))
-      self.optim = tf.train.RMSPropOptimizer(
-          self.learning_rate_op, momentum=0.95, epsilon=0.01).minimize(self.loss)
-      # TODO: Split in compute_Gradients and apply_gradients to incorporate gradient normalization
+      optim = tf.train.RMSPropOptimizer(
+          self.learning_rate_op, momentum=0.95, epsilon=0.01)
+      # different optimizer for each head
+      self.optims = []
+      q_names = ['q{}'.format(h) for h in range(self.nb_heads)]
+      for head in range(self.nb_heads):
+        other_qs = q_names[:head] + q_names[head+1:]
+        # get all trainable variables, remove all the ones of the other heads
+        trainable_vars = filter(lambda v: all([q not in v.name for q in other_qs]), tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES))
+        self.optims.append(optim.minimize(self.loss, var_list=trainable_vars))
+        # print([v.name for v in trainable_vars])
+        # TODO: Split in compute_Gradients and apply_gradients to incorporate gradient normalization
     #TODO temp
     self.select_head(0)
 
