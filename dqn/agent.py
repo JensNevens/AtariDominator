@@ -166,6 +166,7 @@ class Agent(BaseModel):
     _, q_t, loss, summary_str = self.sess.run([self.optim, self.q, self.loss, self.q_summary], {
       self.target_q_t: target_q_t,
       self.action: action,
+      self.head: 0,
       self.s_t: s_t,
       self.learning_rate_step: self.step,
     })
@@ -305,18 +306,21 @@ class Agent(BaseModel):
       for name in self.w.keys():
         self.t_w_input[name] = tf.placeholder('float32', self.t_w[name].get_shape().as_list(), name=name)
         self.t_w_assign_op[name] = self.t_w[name].assign(self.t_w_input[name])
-    #TODO temp
-    self.select_head(0)
     # optimizer
     with tf.variable_scope('optimizer'):
       # TODO: Split target Q output over K heads
       # Apply mask to distribute data across heads
       self.target_q_t = tf.placeholder('float32', [None], name='target_q_t')
       self.action = tf.placeholder('int64', [None], name='action')
+      self.head = tf.placeholder('int32', [None], name='head')
 
       action_one_hot = tf.one_hot(self.action, self.env.action_size, 1.0, 0.0, name='action_one_hot')
-      q_acted = tf.reduce_sum(self.q * action_one_hot, reduction_indices=1, name='q_acted')
-
+      head_one_hot = tf.one_hot(self.head, self.nb_heads, 1.0, 0.0, name='head_one_hot')
+      # stack the different heads in one tensor in such a way that they can be multiplied with
+      # one-hot head tensor
+      head_q = tf.reduce_sum(head_one_hot * tf.stack(self.qs, axis=2), 2)
+      q_acted = tf.reduce_sum(head_q * action_one_hot, reduction_indices=1, name='q_acted')
+      
       self.delta = self.target_q_t - q_acted
 
       self.global_step = tf.Variable(0, trainable=False)
@@ -333,6 +337,8 @@ class Agent(BaseModel):
       self.optim = tf.train.RMSPropOptimizer(
           self.learning_rate_op, momentum=0.95, epsilon=0.01).minimize(self.loss)
       # TODO: Split in compute_Gradients and apply_gradients to incorporate gradient normalization
+    #TODO temp
+    self.select_head(0)
 
     with tf.variable_scope('summary'):
       scalar_summary_tags = ['average.reward', 'average.loss', 'average.q', \
