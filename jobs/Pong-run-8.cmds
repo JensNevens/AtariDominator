@@ -4,4 +4,4 @@ cd $HOME
 source .bashrc
 source activate dqn
 cd dev/AtariDominator
-python main.py --use_gpu 1 --is_train True --env_name Pong-v0 --model base --random_seed 891
+python main.py --use_gpu 1 --is_train True --env_name Pong-v0 --model base --random_seed 8912
