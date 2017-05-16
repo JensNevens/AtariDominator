@@ -166,7 +166,7 @@ class Agent(BaseModel):
     _, q_t, loss, summary_str = self.sess.run([self.optim, self.q, self.loss, self.q_summary], {
       self.target_q_t: target_q_t,
       self.action: action,
-      self.head: self.current_head,
+      self.head: [self.current_head],
       self.s_t: s_t,
       self.learning_rate_step: self.step,
     })
