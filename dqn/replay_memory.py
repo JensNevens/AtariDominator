@@ -17,6 +17,10 @@ class ReplayMemory:
     self.rewards = np.empty(self.memory_size, dtype = np.integer)
     self.screens = np.empty((self.memory_size, config.screen_height, config.screen_width), dtype = np.float16)
     self.terminals = np.empty(self.memory_size, dtype = np.bool)
+
+    self.mask_size = config.nb_heads
+    self.masks = np.empty((self.memory_size, self.mask_size), dtype = np.uint8)
+
     self.history_length = config.history_length
     self.dims = (config.screen_height, config.screen_width)
     self.batch_size = config.batch_size
@@ -34,9 +38,13 @@ class ReplayMemory:
     self.rewards[self.current] = reward
     self.screens[self.current, ...] = screen
     self.terminals[self.current] = terminal
+
+    # TODO: When adding a sample, also create a mask and add this to the sample
+    mask = np.random.binomial(1, 0.5, self.mask_size)
+    self.masks[self.current] = mask
+
     self.count = max(self.count, self.current + 1)
     self.current = (self.current + 1) % self.memory_size
-    # TODO: When adding a sample, also create a mask and add this to the sample
 
   def getState(self, index):
     assert self.count > 0, "replay memory is empy, use at least --random_steps 1"
@@ -79,22 +87,24 @@ class ReplayMemory:
     actions = self.actions[indexes]
     rewards = self.rewards[indexes]
     terminals = self.terminals[indexes]
+    
     # TODO: Also return the mask in the sample
+    masks = self.masks[indexes]
 
     if self.cnn_format == 'NHWC':
       return np.transpose(self.prestates, (0, 2, 3, 1)), actions, \
-        rewards, np.transpose(self.poststates, (0, 2, 3, 1)), terminals
+        rewards, np.transpose(self.poststates, (0, 2, 3, 1)), terminals, masks
     else:
-      return self.prestates, actions, rewards, self.poststates, terminals
+      return self.prestates, actions, rewards, self.poststates, terminals, masks
 
   def save(self):
     for idx, (name, array) in enumerate(
-        zip(['actions', 'rewards', 'screens', 'terminals', 'prestates', 'poststates'],
-            [self.actions, self.rewards, self.screens, self.terminals, self.prestates, self.poststates])):
+        zip(['actions', 'rewards', 'screens', 'terminals', 'masks', 'prestates', 'poststates'],
+            [self.actions, self.rewards, self.screens, self.terminals, self.masks, self.prestates, self.poststates])):
       save_npy(array, os.path.join(self.model_dir, name))
 
   def load(self):
     for idx, (name, array) in enumerate(
-        zip(['actions', 'rewards', 'screens', 'terminals', 'prestates', 'poststates'],
-            [self.actions, self.rewards, self.screens, self.terminals, self.prestates, self.poststates])):
+        zip(['actions', 'rewards', 'screens', 'terminals', 'masks', 'prestates', 'poststates'],
+            [self.actions, self.rewards, self.screens, self.terminals, self.masks, self.prestates, self.poststates])):
       array = load_npy(os.path.join(self.model_dir, name))

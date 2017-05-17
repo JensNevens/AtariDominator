@@ -144,7 +144,8 @@ class Agent(BaseModel):
     if self.memory.count < self.history_length:
       return
     else:
-      s_t, action, reward, s_t_plus_1, terminal = self.memory.sample()
+      # memory.sample also returns a mask now
+      s_t, action, reward, s_t_plus_1, terminal, mask = self.memory.sample()
 
     t = time.time()
     if self.double_q:
@@ -157,6 +158,7 @@ class Agent(BaseModel):
       })
       target_q_t = (1. - terminal) * self.discount * q_t_plus_1_with_pred_action + reward
     else:
+      # TODO: Use the mask in update?
       q_t_plus_1 = self.target_q.eval({self.target_s_t: s_t_plus_1})
 
       terminal = np.array(terminal) + 0.
