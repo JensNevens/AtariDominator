@@ -43,13 +43,13 @@ class Agent(BaseModel):
     for _ in range(self.history_length):
       self.history.add(screen)
 
-     # TODO: Choose a head for this episode
-    self.select_head(0)
     for self.step in tqdm(range(start_step, self.max_step), ncols=70, initial=start_step):
       if self.step == self.learn_start:
         num_game, self.update_count, ep_reward = 0, 0, 0.
         total_reward, self.total_loss, self.total_q = 0., 0., 0.
         ep_rewards, actions = [], []
+        # head for first episode
+        self.select_head(np.random.randint(self.nb_heads))
 
       # 1. predict
       action = self.predict(self.history.get())
@@ -60,6 +60,8 @@ class Agent(BaseModel):
 
       if terminal:
         screen, reward, action, terminal = self.env.new_random_game()
+        # change head after each episode
+        self.select_head(np.random.randint(self.nb_heads))
 
         num_game += 1
         ep_rewards.append(ep_reward)
@@ -159,16 +161,19 @@ class Agent(BaseModel):
       target_q_t = (1. - terminal) * self.discount * q_t_plus_1_with_pred_action + reward
     else:
       # TODO: Use the mask in update?
-      q_t_plus_1 = self.target_q.eval({self.target_s_t: s_t_plus_1})
-
+      # return q-values of state for each head
+      q_t_plus_1 = self.target_qs.eval({self.target_s_t: s_t_plus_1})
       terminal = np.array(terminal) + 0.
-      max_q_t_plus_1 = np.max(q_t_plus_1, axis=1)
+      # choose the highest q-value for each head
+      max_q_t_plus_1 = np.max(q_t_plus_1, axis=2)
       target_q_t = (1. - terminal) * self.discount * max_q_t_plus_1 + reward
+      # apply masks
+      #target_q_t = (target_q_t.T*mask).T
 
     _, q_t, loss, summary_str = self.sess.run([self.optim, self.q, self.loss, self.q_summary], {
       self.target_q_t: target_q_t,
       self.action: action,
-      self.head: [self.current_head],
+      self.mask: mask,
       self.s_t: s_t,
       self.learning_rate_step: self.step,
     })
@@ -183,10 +188,10 @@ class Agent(BaseModel):
     self.current_head = head
     self.q = self.qs[head]
     self.q_action = self.qs_action[head]
-    self.target_q = self.target_qs[head]
-    self.target_q_idx = self.target_qs_idx[head]
-    self.target_q_with_idx = self.target_qs_with_idx[head]
-    self.optim = self.optims[head]
+    # self.target_q = self.target_qs[head]
+    # self.target_q_idx = self.target_qs_idx[head]
+    # self.target_q_with_idx = self.target_qs_with_idx[head]
+    # self.optim = self.optims[head]
 
   def build_dqn(self):
     self.w = {}
@@ -289,7 +294,7 @@ class Agent(BaseModel):
         self.target_l4, self.t_w['l4_w'], self.t_w['l4_b'] = \
             linear(self.target_l3_flat, 512, activation_fn=activation_fn, name='target_l4')
         # make target Q for each head
-        self.target_qs = []
+        target_qs = []
         self.target_qs_idx = []
         self.target_qs_with_idx = []
         for head in range(self.nb_heads):
@@ -297,11 +302,13 @@ class Agent(BaseModel):
           target_q, self.t_w[q+'_w'], self.t_w[q+'_b'] = \
             linear(self.target_l4, self.env.action_size, name='target_'+q)
 
-          target_q_idx = tf.placeholder('int32', [None, None], 'outputs_idx')
-          target_q_with_idx = tf.gather_nd(target_q, target_q_idx)
-          self.target_qs.append(target_q)
-          self.target_qs_idx.append(target_q_idx)
-          self.target_qs_with_idx.append(target_q_with_idx)
+          # target_q_idx = tf.placeholder('int32', [None, None], 'outputs_idx')
+          # target_q_with_idx = tf.gather_nd(target_q, target_q_idx)
+          target_qs.append(target_q)
+          # both used for double q networks, ignore
+          # self.target_qs_idx.append(target_q_idx)
+          # self.target_qs_with_idx.append(target_q_with_idx)
+        self.target_qs = tf.stack(target_qs)
 
     with tf.variable_scope('pred_to_target'):
       self.t_w_input = {}
@@ -313,18 +320,16 @@ class Agent(BaseModel):
     # optimizer
     with tf.variable_scope('optimizer'):
       # Apply mask to distribute data across heads
-      self.target_q_t = tf.placeholder('float32', [None], name='target_q_t')
+      self.target_q_t = tf.placeholder('float32', [self.nb_heads, None], name='target_q_t')
       self.action = tf.placeholder('int64', [None], name='action')
-      self.head = tf.placeholder('int32', [None], name='head')
+      self.mask = tf.placeholder('float32', [None, self.nb_heads], name='mask')
 
       action_one_hot = tf.one_hot(self.action, self.env.action_size, 1.0, 0.0, name='action_one_hot')
-      head_one_hot = tf.one_hot(self.head, self.nb_heads, 1.0, 0.0, name='head_one_hot')
-      # stack the different heads in one tensor in such a way that they can be multiplied with
-      # one-hot head tensor
-      head_q = tf.reduce_sum(head_one_hot * tf.stack(self.qs, axis=2), 2)
-      q_acted = tf.reduce_sum(head_q * action_one_hot, reduction_indices=1, name='q_acted')
 
-      self.delta = self.target_q_t - q_acted
+      # acted q for all heads, need to stack them together
+      q_acted = tf.reduce_sum(action_one_hot * tf.stack(self.qs), 2, name='q_acted')
+      # set delta to mask only
+      self.delta = tf.transpose(self.mask)*(self.target_q_t - q_acted)
 
       self.global_step = tf.Variable(0, trainable=False)
 
@@ -339,15 +344,16 @@ class Agent(BaseModel):
               staircase=True))
       optim = tf.train.RMSPropOptimizer(
           self.learning_rate_op, momentum=0.95, epsilon=0.01)
+      self.optim = optim.minimize(self.loss)
       # different optimizer for each head
-      self.optims = []
-      q_names = ['q{}'.format(h) for h in range(self.nb_heads)]
-      for head in range(self.nb_heads):
-        other_qs = q_names[:head] + q_names[head+1:]
-        # get all trainable variables, remove all the ones of the other heads
-        trainable_vars = filter(lambda v: all([q not in v.name for q in other_qs]), tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES))
-        self.optims.append(optim.minimize(self.loss, var_list=trainable_vars))
-        # print([v.name for v in trainable_vars])
+    #   self.optims = []
+    #   q_names = ['q{}'.format(h) for h in range(self.nb_heads)]
+    #   for head in range(self.nb_heads):
+    #     other_qs = q_names[:head] + q_names[head+1:]
+    #     # get all trainable variables, remove all the ones of the other heads
+    #     trainable_vars = filter(lambda v: all([q not in v.name for q in other_qs]), tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES))
+    #     self.optims.append(optim.minimize(self.loss, var_list=trainable_vars))
+    #     # print([v.name for v in trainable_vars])
         # TODO: Split in compute_Gradients and apply_gradients to incorporate gradient normalization
 
     with tf.variable_scope('summary'):
