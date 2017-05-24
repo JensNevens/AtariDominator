@@ -426,7 +426,6 @@ class Agent(BaseModel):
 
     best_reward, best_idx = 0, 0
     # TODO: For evaluation, using an ensemble voting policy using all heads
-    self.select_head(0)
     for idx in xrange(n_episode):
       screen, reward, action, terminal = self.env.new_random_game()
       current_reward = 0
@@ -436,7 +435,19 @@ class Agent(BaseModel):
 
       for t in tqdm(range(n_step), ncols=70):
         # 1. predict
-        action = self.predict(test_history.get(), test_ep)
+        # Let all heads choose an action
+        # Keep a dictionary of votes
+        # Do the action with most votes?
+        action_votes = {}
+        for head in range(self.nb_heads):
+            self.select_head(head)
+            head_action = self.predict(test_history.get(), test_ep)
+            if head_action in action_votes:
+                action_votes[head_action] += 1
+            else:
+                action_votes[head_action] = 1
+        most_votes = max(action_votes, key=action_votes.get)
+        action = action_votes[most_votes]
         # 2. act
         screen, reward, terminal = self.env.act(action, is_training=False)
         # 3. observe
