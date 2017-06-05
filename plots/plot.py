@@ -1,59 +1,48 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-import argparse
 import os
+import sys
 
-def plot(data_dir, mean_only=False):
+def plot(data_dir):
     # Get all files in data_dir
-    files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
-    # We assume the following data_dir:
-    # ../../../ENV_NAME/VAL_NAME/*.csv
-    # For example: tf-data/Pong-DQN/average-q/*.csv
-    path = os.path.normpath(data_dir)
-    head, val_name = os.path.split(path)
-    _, env_name = os.path.split(head)
-
-    # Create one big dataframe
-    df = pd.DataFrame()
-    row_sizes = []
-    for i, f in enumerate(files):
-        if 'scalars' in f:
-            f_path = os.path.join(data_dir, f)
-            data = pd.read_csv(f_path)
-            if 'step' not in df.columns:
-                df.loc[:, 'step'] = data.loc[:, 'Step']
-            colname = 'run' + str(i)
-            df.loc[:, colname] = data.loc[:, 'Value']
-            run_length = len(data['Value'])
-            row_sizes.append(run_length)
-
-    # Compute mean and std, ommit 'step' column
-    df1 = df.drop(['step'], axis=1)
-    df.loc[:, 'mean'] = df1.mean(axis=1)
-    df.loc[:, 'std'] = df1.std(axis=1)
-
-    # Create the plot
-    fig, ax = plt.subplots()
-    for column in df:
-        if 'run' in column:
-            col_data = np.array(df.loc[:, column])
-            if not mean_only:
-                ax.plot(df.loc[:, 'step'], col_data, 'b--', alpha=0.3, label=None)
-    rolling_mean = df.loc[:, 'mean'].rolling(window=10, center=True).mean()
-    ax.errorbar(df.loc[:, 'step'], rolling_mean, yerr=df.loc[:, 'std'], fmt='b', errorevery=10, label=val_name)
-    ax.legend(loc='best')
-    ax.set_xlabel('steps')
-    ax.set_ylabel(val_name)
-    # ax.set_title('Average score per episode')
-    ax.grid(linestyle='--', linewidth=1, alpha=0.1)
-    # plt.show()
-
-    fig.savefig(env_name + '-' + val_name + '.pdf')
+    paths = [os.path.join(data_dir, f) for f in os.listdir(data_dir)]
+    paths = [path for path in paths if os.path.splitext(path)[-1].lower() == '.csv']
+    # Create a huge df with MultiIndex
+    inner = list(range(len(paths)))
+    df = pd.read_csv(paths[0], index_col=0)
+    outer = np.array(df.columns)
+    iterables = [outer, inner]
+    cols = pd.MultiIndex.from_product(iterables, names=['metric', 'idx'])
+    df = pd.DataFrame(columns=cols)
+    # Dump all the data into it
+    for i, path in enumerate(paths):
+        df_in = pd.read_csv(path, index_col=0)
+        for column in df_in:
+            df.loc[:, (column,i)] = df_in[column]
+    # Compute the means and stds
+    for metric in df.columns.get_level_values(0).unique():
+        df.loc[:, (metric, 'mean')] = df[metric].mean(axis=1)
+        df.loc[:, (metric, 'std')] = df[metric].std(axis=1)
+    # Create plots for every metric
+    for metric in df.columns.get_level_values(0).unique():
+        fig, ax = plt.subplots()
+        start = 99999
+        length = len(df)
+        step = 50000
+        X = list(range(start, (start+(length*step)), step))
+        Y = df.loc[:, (metric, 'mean')]
+        Y = Y.rolling(window=10, center=True).mean()
+        bars = df.loc[:, (metric, 'std')]
+        label = metric.split('/')[-1]
+        ax.errorbar(X, Y, yerr=bars, fmt='b', errorevery=50, label=label)
+        ax.legend(loc='best')
+        ax.set_xlabel('steps')
+        ax.grid(linestyle='--', linewidth=1, alpha=0.1)
+        out_path = os.path.join(data_dir, label) + '.pdf'
+        fig.savefig(out_path)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Plot tensorboard csv data.')
-    parser.add_argument('dir', type=str, help='The directory that contains the CSV files')
-    parser.add_argument('-m', '--meanonly', action='store_true', help='Bool to indicate to plot the mean only')
-    args = parser.parse_args()
-    plot(args.dir, mean_only=args.meanonly)
+    args = sys.argv
+    data_dir = args[1]
+    plot(data_dir)
