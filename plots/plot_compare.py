@@ -31,7 +31,8 @@ def plot(data1, data2):
     for i, path in enumerate(paths1):
         df_in = pd.read_csv(path, index_col=0)
         for column in df_in:
-            df1.loc[:, (column,i)] = df_in[column]
+            normalized_col = column.split('/')[-1]
+            df1.loc[:, (normalized_col,i)] = df_in[column]
     for i, path in enumerate(paths2):
         df_in = pd.read_csv(path, index_col=0)
         for column in df_in:
