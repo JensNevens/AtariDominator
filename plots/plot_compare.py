@@ -60,8 +60,8 @@ def plot(data1, data2):
         bars1 = df1.loc[:, (metric, 'std')]
         bars2 = df2.loc[:, (metric, 'std')]
         title = metric.split('/')[-1]
-        ax.errorbar(X1, Y1, yerr=bars1, fmt='b', errorevery=50, label=dataname1)
-        ax.errorbar(X2, Y2, yerr=bars2, fmt='g', errorevery=50, label=dataname2)
+        ax.errorbar(X1, Y1, yerr=bars1, fmt='b', errorevery=50, capsize=5, label=dataname1)
+        ax.errorbar(X2, Y2, yerr=bars2, fmt='g', errorevery=50, capsize=5, label=dataname2)
         ax.legend(loc='best')
         ax.set_xlabel('steps')
         ax.set_title(title)
