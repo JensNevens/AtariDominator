@@ -66,7 +66,7 @@ def plot(data1, data2):
         ax.legend(loc='best')
         ax.set_xlabel('steps')
         ax.set_title(title)
-        ax.grid(linestyle='--', linewidth=1, alpha=0.1)
+        ax.grid(linestyle='--', linewidth=1)
         out_path = './' + title + '.pdf'
         fig.savefig(out_path)
         fig.clf()
